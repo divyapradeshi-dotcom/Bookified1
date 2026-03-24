@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@plugin "tailwindcss-animate";   /* ← add this line */
+
 
 @custom-variant dark (&:is(.dark *));
 
@@ -205,7 +207,7 @@
     @apply max-w-7xl px-5 mx-auto w-full space-y-6 py-18 min-h-screen;
   }
   .new-book-wrapper {
-    @apply mx-auto max-w-2xl space-y-6 mt-12 mb-20;
+    @apply mx-auto max-w-2xl space-y-6 mt-12 mb-20 w-full;
   }
   .file-upload-shadow {
     @apply relative z-20 flex flex-col justify-center items-center p-7;
@@ -616,19 +618,22 @@
      VOICE SELECTOR COMPONENT
      =========================================== */
   .voice-selector-options {
-    @apply flex gap-4;
+    @apply grid gap-3;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   }
   .voice-selector-option {
-    @apply flex-1 flex items-center justify-center gap-3 p-4 border border-[var(--border-subtle)] rounded-lg cursor-pointer transition-all;
+    @apply flex items-start gap-3 p-4 border rounded-lg cursor-pointer transition-all bg-white;
+    border-color: #e0d4c2;
     box-shadow: var(--shadow-soft-sm);
 
     &:hover {
       box-shadow: var(--shadow-soft);
-      transform: translateY(-2px);
+      transform: translateY(-1px);
     }
   }
   .voice-selector-option-selected {
-    @apply bg-[var(--accent-light)] border-[var(--accent-warm)];
+    @apply bg-[#fff8e9];
+    border-color: #8b7355;
   }
   .voice-selector-option-default {
     @apply bg-white;
@@ -682,14 +687,16 @@
      UPLOAD FORM COMPONENT
      =========================================== */
   .upload-dropzone {
-    @apply flex flex-col items-center justify-center h-[165px] bg-white rounded-[6px] cursor-pointer transition-all;
+    @apply relative flex w-full flex-col items-center justify-center h-[165px] bg-white rounded-[10px] cursor-pointer transition-all border-2 border-dashed;
+    border-color: #dccdb6;
 
     &:hover {
-      @apply bg-gray-50;
+      @apply bg-[#fffdf8];
     }
   }
   .upload-dropzone-uploaded {
-    @apply bg-[#f3e4c7];
+    @apply bg-[#fff8ea];
+    border-color: #8b7355;
 
     .upload-dropzone-text {
       @apply text-[#663820];
@@ -702,13 +709,13 @@
     @apply w-[48px] h-[48px] mb-2 text-[#8B7355];
   }
   .upload-dropzone-text {
-    @apply text-[#777] text-lg font-medium text-center;
+    @apply text-[#777] text-lg font-medium text-center max-w-[80%] truncate;
   }
   .upload-dropzone-hint {
     @apply text-[#777] text-sm mt-1;
   }
   .upload-dropzone-remove {
-    @apply flex items-center justify-center w-6 h-6 text-red-500 transition-colors cursor-pointer;
+    @apply absolute top-3 right-3 flex items-center justify-center w-7 h-7 rounded-full bg-white text-red-500 transition-colors cursor-pointer border border-[#eadfce];
 
     &:hover {
       @apply text-red-600;
@@ -718,7 +725,11 @@
     @apply text-lg font-medium text-black mb-2 block;
   }
   .form-input {
-    @apply w-full p-4 bg-white rounded-lg text-lg font-medium text-[#222] placeholder:text-[#999];
+    @apply w-full p-4 bg-white rounded-lg text-lg font-medium text-[#222] placeholder:text-[#999] border border-[#e0d4c2] outline-none;
+  }
+  .form-input:focus {
+    border-color: #8b7355;
+    box-shadow: 0 0 0 3px rgba(139, 115, 85, 0.12);
   }
 
   /* ===========================================

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
+import { ClerkProvider, SignInButton, SignUpButton, Show, UserButton } from "@clerk/nextjs";
 import {  IBM_Plex_Serif, Mona_Sans } from "next/font/google";
 import "./globals.css";
-import Navbar from "@/components/ui/Navbar";
+import Navbar from "@/components/Navbar";
 
 const ibmPlexSerif=IBM_Plex_Serif({
   variable:'--font-ibm-plex-serif',
@@ -27,13 +28,26 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"> 
-      <body
-      className={`${ibmPlexSerif.variable} ${monaSans.variable} relative font-sans antialiased`}
-    >
-      <Navbar/>
-      {children}</body>
+    <html lang="en"> 
+      <body className={`${ibmPlexSerif.variable} ${monaSans.variable} relative font-sans antialiased`}>
+        <ClerkProvider>
+          <header className="flex gap-2 p-4">
+            <Show when="signed-out">
+              <SignInButton>
+                <button className="rounded bg-blue-600 px-3 py-1 text-white">Sign in</button>
+              </SignInButton>
+              <SignUpButton>
+                <button className="rounded bg-green-600 px-3 py-1 text-white">Sign up</button>
+              </SignUpButton>
+            </Show>
+            <Show when="signed-in">
+              <UserButton />
+            </Show>
+          </header>
+          <Navbar />
+          {children}
+        </ClerkProvider>
+      </body>
     </html>
   );
 }
