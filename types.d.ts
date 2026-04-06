@@ -28,7 +28,7 @@ export interface IBook extends Document {
 
 export interface IBookSegment extends Document {
     clerkId: string;
-    bookId: Types.ObjectId;
+    bookId: string;
     content: string;
     segmentIndex: number;
     pageNumber?: number;
@@ -40,7 +40,7 @@ export interface IBookSegment extends Document {
 export interface IVoiceSession extends Document {
     _id: string;
     clerkId: string;
-    bookId: Types.ObjectId;
+    bookId: string;
     startedAt: Date;
     endedAt?: Date;
     durationSeconds: number;

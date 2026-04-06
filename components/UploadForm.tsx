@@ -1,11 +1,14 @@
 'use client';
 
 import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { useAuth } from '@clerk/nextjs';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ImageIcon, LoaderCircle, Upload, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -15,8 +18,24 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import { upload } from '@vercel/blob/client';
+import {
+  checkBookExists as checkBookExistsAction,
+  createBook,
+  saveBookSegments,
+} from '@/lib/actions/book.actions';
+import { generateSlug, parsePDFFile } from '@/lib/utils';
 
 const MAX_PDF_SIZE = 50 * 1024 * 1024;
+
+const isFile = (value: unknown): value is File => value instanceof File;
+
+const isValidPdfFile = (file?: File) =>
+  !file || file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
+const isValidPdfSize = (file?: File) => !file || file.size <= MAX_PDF_SIZE;
+
+const isValidCoverImage = (file?: File) => !file || file.type.startsWith('image/');
 
 const voiceGroups = [
   {
@@ -58,30 +77,27 @@ const voiceGroups = [
 
 const uploadSchema = z.object({
   pdfFile: z
-    .custom<File | undefined>((value) => value === undefined || value instanceof File, {
+    .custom<File | undefined>((value) => value === undefined || isFile(value), {
       message: 'Please upload a PDF file.',
     })
     .refine((file) => !!file, 'Please upload a PDF file.')
-    .refine(
-      (file) =>
-        !file ||
-        file.type === 'application/pdf' ||
-        file.name.toLowerCase().endsWith('.pdf'),
-      'File must be a PDF.'
-    )
-    .refine((file) => !file || file.size <= MAX_PDF_SIZE, 'PDF must be 50MB or smaller.'),
+    .refine(isValidPdfFile, 'File must be a PDF.')
+    .refine(isValidPdfSize, 'PDF must be 50MB or smaller.'),
   coverImage: z
-    .custom<File | undefined>((value) => value === undefined || value instanceof File, {
+    .custom<File | undefined>((value) => value === undefined || isFile(value), {
       message: 'Please choose a valid image file.',
     })
-    .refine((file) => !file || file.type.startsWith('image/'), 'Cover image must be an image file.')
+    .refine(isValidCoverImage, 'Cover image must be an image file.')
     .optional(),
   title: z.string().trim().min(1, 'Title is required.'),
   author: z.string().trim().min(1, 'Author name is required.'),
   voice: z.enum(['dave', 'daniel', 'chris', 'rachel', 'sarah']),
 });
 
-type UploadFormValues = z.infer<typeof uploadSchema>;
+type UploadFormInput = z.input<typeof uploadSchema>;
+type UploadFormValues = z.output<typeof uploadSchema>;
+
+const checkBookExists = async (title: string) => checkBookExistsAction(title);
 
 function LoadingOverlay() {
   return (
@@ -157,8 +173,9 @@ const UploadForm = () => {
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const form = useForm<UploadFormValues>({
+  const { userId } = useAuth();
+  const router = useRouter();
+  const form = useForm<UploadFormInput, unknown, UploadFormValues>({
     resolver: zodResolver(uploadSchema),
     defaultValues: {
       pdfFile: undefined,
@@ -188,12 +205,94 @@ const UploadForm = () => {
       event.target.value = '';
     };
 
-  const handleSubmit = async (values: UploadFormValues) => {
+  const onSubmit = async (values: UploadFormValues) => {
+    if (!userId) {
+      return toast.error('Please sign in to upload a book.');
+    }
+
     setIsSubmitting(true);
 
+    // posthog -> track book upload
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1400));
-      console.log('Begin synthesis', values);
+      const existsCheck = await checkBookExists(values.title);
+
+      if (existsCheck.exists && existsCheck.data) {
+        toast.info('Book already exists. Please check a different book.');
+        form.reset();
+        router.push(`/book/${existsCheck.data.slug}`);
+        return;
+      }
+
+      const parsedPDF = await parsePDFFile(values.pdfFile);
+
+      if (parsedPDF.content.length === 0) {
+        toast.error('Could not extract any content from the PDF.');
+        return;
+      }
+
+      const fileTitle = generateSlug(values.title) || 'book';
+      const uploadedFile = await upload(`${fileTitle}.pdf`, values.pdfFile, {
+        access: 'public',
+        handleUploadUrl: '/api/upload',
+        contentType: values.pdfFile.type || 'application/pdf',
+      });
+
+      let coverUpload;
+
+      if (values.coverImage) {
+        coverUpload = await upload(`${fileTitle}_cover`, values.coverImage, {
+          access: 'public',
+          handleUploadUrl: '/api/upload',
+          contentType: values.coverImage.type,
+        });
+      } else {
+        const response = await fetch(parsedPDF.cover);
+        const blob = await response.blob();
+
+        coverUpload = await upload(`${fileTitle}_cover.png`, blob, {
+          access: 'public',
+          handleUploadUrl: '/api/upload',
+          contentType: 'image/png',
+        });
+      }
+
+      const book = await createBook({
+        clerkId: userId,
+        title: values.title,
+        author: values.author,
+        persona: values.voice,
+        fileURL: uploadedFile.url,
+        fileBlobKey: uploadedFile.pathname,
+        coverURL: coverUpload.url,
+        coverBlobKey: coverUpload.pathname,
+        fileSize: values.pdfFile.size,
+      });
+
+      if (!book.success || !book.data) {
+        toast.error(book.error ?? 'Failed to create book.');
+        return;
+      }
+
+      if (book.alreadyExists) {
+        toast.info('Book already exists. Please check a different book.');
+        form.reset();
+        router.push(`/book/${book.data.slug}`);
+        return;
+      }
+
+      const savedSegments = await saveBookSegments(book.data._id, userId, parsedPDF.content);
+
+      if (!savedSegments.success) {
+        toast.error(savedSegments.error ?? 'Failed to save book segments.');
+        return;
+      }
+
+      toast.success('Book uploaded successfully.');
+      form.reset();
+      router.push(`/`);
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to upload form.');
     } finally {
       setIsSubmitting(false);
     }
@@ -204,7 +303,7 @@ const UploadForm = () => {
       {isSubmitting ? <LoadingOverlay /> : null}
 
       <Form {...form}>
-        <form className="space-y-6" onSubmit={form.handleSubmit(handleSubmit)}>
+        <form className="space-y-6" onSubmit={form.handleSubmit(onSubmit)}>
             <FormField
               control={form.control}
               name="pdfFile"

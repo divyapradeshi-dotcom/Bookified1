@@ -1,6 +1,13 @@
+import { auth } from '@clerk/nextjs/server';
 import UploadForm from '@/components/UploadForm';
 
-const Page = () => {
+const Page = async () => {
+  const { userId, redirectToSignIn } = await auth();
+
+  if (!userId) {
+    return redirectToSignIn({ returnBackUrl: '/books/new' });
+  }
+
   return (
     <main className="new-book">
       <div className="new-book-wrapper">
