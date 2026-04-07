@@ -29,6 +29,12 @@ export async function POST(request: Request): Promise<NextResponse> {
                     tokenPayload: JSON.stringify({ userId }),
                 };
             },
+            onUploadCompleted: async ({blob,tokenPayload}) => {
+                console.log("File uploaded", blob.url);
+                const payload=tokenPayload? JSON.parse(tokenPayload) : null;
+                const userId=payload.userId;
+            }
+
         });
 
         return NextResponse.json(jsonResponse);

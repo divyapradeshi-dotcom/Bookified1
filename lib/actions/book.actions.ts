@@ -5,6 +5,21 @@ import Book from '@/database/models/book.model';
 import { connectToDatabase } from '@/database/mongoos';
 import { CreateBook, TextSegment } from '@/types';
 import { generateSlug, serializeData } from '@/lib/utils';
+export const getAllBooks = async () => {
+    try{
+        await connectToDatabase();
+        const books=await Book.find().sort({ createdAt: -1 }).lean();
+        return {
+            success:true,
+            data:serializeData(books),
+        }
+    } catch(e){
+        console.error("error connecting to database ",e);
+        return{
+            success: false, error:e
+        }
+    }
+}
 export const createBook = async (data: CreateBook) => {
     try {
         await connectToDatabase();
